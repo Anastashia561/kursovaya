@@ -1,8 +1,10 @@
 from sqlalchemy import String, Integer, BigInteger, Text, JSON, Boolean
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
+
 class Base(DeclarativeBase):
     pass
+
 
 class Rule(Base):
     __tablename__ = "rules"
@@ -18,10 +20,12 @@ class Rule(Base):
     used_requests: Mapped[int] = mapped_column(Integer, default=0)
     blocked_until: Mapped[int] = mapped_column(BigInteger, default=0)
 
+
 class Outbox(Base):
     __tablename__ = "outbox"
     id: Mapped[str] = mapped_column(String(36), primary_key=True)
     payload: Mapped[dict] = mapped_column(JSON)
+
 
 class Event(Base):
     __tablename__ = "events"
@@ -32,6 +36,7 @@ class Event(Base):
     rule: Mapped[str] = mapped_column(String(20))
     payload: Mapped[dict] = mapped_column(JSON)
 
+
 class User(Base):
     __tablename__ = "users"
     name: Mapped[str] = mapped_column(String(80), primary_key=True)
@@ -40,8 +45,10 @@ class User(Base):
     failures: Mapped[int] = mapped_column(Integer, default=0)
     locked_until: Mapped[int] = mapped_column(BigInteger, default=0)
 
+
 class AppBase(DeclarativeBase):
     pass
+
 
 class Record(AppBase):
     __tablename__ = "records"

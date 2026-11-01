@@ -77,7 +77,7 @@ spec:
         - name: tmp
           mountPath: /tmp
         - name: jwt-public
-          mountPath: /run/secrets
+          mountPath: /run/ubi193
           readOnly: true
         startupProbe:
           httpGet:
@@ -174,7 +174,7 @@ spec:
         - name: tmp
           mountPath: /tmp
         - name: jwt-public
-          mountPath: /run/secrets
+          mountPath: /run/ubi193
           readOnly: true
         startupProbe:
           httpGet:
@@ -275,7 +275,7 @@ spec:
         - name: tmp
           mountPath: /tmp
         - name: jwt-public
-          mountPath: /run/secrets
+          mountPath: /run/ubi193
           readOnly: true
         startupProbe:
           httpGet:

@@ -2,10 +2,12 @@ from dataclasses import dataclass
 from .counters import reset_window
 from .blocks import block_source
 
+
 @dataclass(frozen=True)
 class Decision:
     allowed: bool
     rule: str
+
 
 def evaluate(rule, host, size, content_type, now):
     if now < rule.blocked_until:

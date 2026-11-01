@@ -1,6 +1,7 @@
 from fastapi import HTTPException
 from sqlalchemy import text
 
+
 def add_health(app, sessions):
     @app.get("/healthz")
     def live():

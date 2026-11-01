@@ -9,6 +9,7 @@ from common.config import Settings
 from common.tokens import verify_token
 from common.health import add_health
 
+
 class EventData(BaseModel):
     id: UUID
     created: int = Field(ge=0)
@@ -18,12 +19,21 @@ class EventData(BaseModel):
     decision: str = Field(pattern="^(ALLOW|DENY)$")
     rule: str = Field(pattern="^(ALLOW|R[1-5])$")
 
+
 def store_event(sessions, data):
     payload = data.model_dump(mode="json")
     try:
         with sessions.begin() as db:
-            db.add(Event(id=str(data.id), created=data.created, service=data.service,
-                         decision=data.decision, rule=data.rule, payload=payload))
+            db.add(
+                Event(
+                    id=str(data.id),
+                    created=data.created,
+                    service=data.service,
+                    decision=data.decision,
+                    rule=data.rule,
+                    payload=payload,
+                )
+            )
     except IntegrityError:
         with sessions() as db:
             previous = db.get(Event, str(data.id))
@@ -31,6 +41,7 @@ def store_event(sessions, data):
                 raise HTTPException(409, "Event identity conflict")
         return False
     return True
+
 
 def create_app(cfg=None, sessions=None):
     cfg = cfg or Settings()
@@ -48,7 +59,11 @@ def create_app(cfg=None, sessions=None):
     def events(authorization: str = Header(default=""), limit: int = 50):
         verify_token(authorization, cfg.key("jwt-public.pem"))
         with sessions() as db:
-            rows = db.scalars(select(Event).order_by(Event.created.desc(), Event.id)
-                              .limit(min(max(limit, 1), 200))).all()
+            rows = db.scalars(
+                select(Event)
+                .order_by(Event.created.desc(), Event.id)
+                .limit(min(max(limit, 1), 200))
+            ).all()
             return [row.payload for row in rows]
+
     return app

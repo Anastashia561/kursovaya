@@ -13,6 +13,7 @@ from scripts.prepare import ROOT, HOST
 def verify(root, cluster=False):
     credentials = json.loads((Path(root) / "credentials.json").read_text())
     checks = []
+    completed = False
 
     def check(name, actual, expected):
         checks.append(
@@ -186,6 +187,7 @@ except (httpx.ConnectTimeout,httpx.ConnectError):
                     and all(x["health"] == "up" for x in targets),
                     True,
                 )
+            completed = True
     finally:
         out = ROOT / "test-results"
         out.mkdir(exist_ok=True)
@@ -200,7 +202,8 @@ except (httpx.ConnectTimeout,httpx.ConnectError):
                         else "Windows or Linux/SQLite/NGINX/HTTP/TLS"
                     ),
                     "checks": checks,
-                    "passed": bool(checks)
+                    "passed": completed
+                    and bool(checks)
                     and all(x["passed"] for x in checks),
                 },
                 indent=2,

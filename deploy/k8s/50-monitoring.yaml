@@ -1,0 +1,253 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monitoring-config
+  namespace: monitoring
+data:
+  prometheus.yml: "global:\n  scrape_interval: 5s\n  evaluation_interval: 5s\nrule_files:\n\
+    - /etc/prometheus/alerts.yml\nscrape_configs:\n- job_name: security-pods\n  kubernetes_sd_configs:\n\
+    \  - role: pod\n    namespaces:\n      names:\n      - security\n  relabel_configs:\n\
+    \  - source_labels:\n    - __meta_kubernetes_pod_label_app\n    action: keep\n\
+    \    regex: security-service\n  - source_labels:\n    - __meta_kubernetes_pod_container_port_number\n\
+    \    action: keep\n    regex: '8081'\n"
+  alerts.yml: "groups:\n- name: egress\n  rules:\n  - alert: EgressDenied\n    expr:\
+    \ sum(increase(egress_blocked_total[1m])) > 0\n    for: 0s\n    labels:\n    \
+    \  severity: warning\n    annotations:\n      summary: \"Outgoing request denied\
+    \ by R1\\u2013R5\"\n"
+  datasources.yml: "apiVersion: 1\ndatasources:\n- name: Prometheus\n  uid: prometheus\n\
+    \  type: prometheus\n  url: http://prometheus.monitoring.svc.cluster.local:9090\n\
+    \  access: proxy\n  isDefault: true\n"
+  dashboards.yml: "apiVersion: 1\nproviders:\n- name: ubi193\n  type: file\n  options:\n\
+    \    path: /var/lib/grafana/dashboards\n"
+  dashboard.json: "{\n  \"uid\": \"ubi193\",\n  \"title\": \"UBI193 Egress\",\n  \"\
+    schemaVersion\": 39,\n  \"version\": 1,\n  \"refresh\": \"5s\",\n  \"panels\"\
+    : [\n    {\n      \"id\": 1,\n      \"type\": \"timeseries\",\n      \"title\"\
+    : \"Requests\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n\
+    \        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\"\
+    : 0,\n        \"y\": 0,\n        \"w\": 12,\n        \"h\": 8\n      },\n    \
+    \  \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"sum(rate(egress_requests_total[1m]))\"\n        }\n      ]\n    },\n    {\n\
+    \      \"id\": 2,\n      \"type\": \"timeseries\",\n      \"title\": \"Denied\
+    \ by rule\",\n      \"datasource\": {\n        \"type\": \"prometheus\",\n   \
+    \     \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\":\
+    \ 12,\n        \"y\": 0,\n        \"w\": 12,\n        \"h\": 8\n      },\n   \
+    \   \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"sum by(rule)(increase(egress_blocked_total[1m]))\"\n        }\n      ]\n \
+    \   },\n    {\n      \"id\": 3,\n      \"type\": \"timeseries\",\n      \"title\"\
+    : \"Reserved body bytes\",\n      \"datasource\": {\n        \"type\": \"prometheus\"\
+    ,\n        \"uid\": \"prometheus\"\n      },\n      \"gridPos\": {\n        \"\
+    x\": 0,\n        \"y\": 8,\n        \"w\": 12,\n        \"h\": 8\n      },\n \
+    \     \"targets\": [\n        {\n          \"refId\": \"A\",\n          \"expr\"\
+    : \"sum(rate(egress_bytes_total[1m]))\"\n        }\n      ]\n    },\n    {\n \
+    \     \"id\": 4,\n      \"type\": \"timeseries\",\n      \"title\": \"Check p95\"\
+    ,\n      \"datasource\": {\n        \"type\": \"prometheus\",\n        \"uid\"\
+    : \"prometheus\"\n      },\n      \"gridPos\": {\n        \"x\": 12,\n       \
+    \ \"y\": 8,\n        \"w\": 12,\n        \"h\": 8\n      },\n      \"targets\"\
+    : [\n        {\n          \"refId\": \"A\",\n          \"expr\": \"histogram_quantile(0.95,sum\
+    \ by(le)(rate(egress_check_seconds_bucket[1m])))\"\n        }\n      ]\n    }\n\
+    \  ]\n}"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - name: http
+    port: 9090
+    targetPort: 9090
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: true
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v3.2.1
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9090
+        env: []
+        resources:
+          requests:
+            cpu: 50m
+            memory: 96Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: config
+          mountPath: /etc/prometheus
+        - name: tmp
+          mountPath: /prometheus
+        startupProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          periodSeconds: 5
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          periodSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          periodSeconds: 5
+          failureThreshold: 3
+        command:
+        - /bin/prometheus
+        - --config.file=/etc/prometheus/prometheus.yml
+        - --storage.tsdb.path=/prometheus
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: config
+        configMap:
+          name: monitoring-config
+      serviceAccountName: prometheus
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  selector:
+    app: grafana
+  ports:
+  - name: http
+    port: 3000
+    targetPort: 3000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      containers:
+      - name: grafana
+        image: grafana/grafana:11.6.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+        env:
+        - name: SERVICE
+          value: grafana
+        - name: PORT
+          value: '3000'
+        - name: GF_SECURITY_ADMIN_USER
+          value: admin
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: service-config
+              key: GRAFANA_PASSWORD
+        - name: GF_LOG_MODE
+          value: console
+        - name: GF_PATHS_LOGS
+          value: /var/lib/grafana/logs
+        resources:
+          requests:
+            cpu: 50m
+            memory: 96Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /var/lib/grafana
+        - name: tmp
+          mountPath: /tmp
+        - name: config
+          mountPath: /etc/grafana/provisioning/datasources/default.yml
+          subPath: datasources.yml
+        - name: config
+          mountPath: /etc/grafana/provisioning/dashboards/default.yml
+          subPath: dashboards.yml
+        - name: config
+          mountPath: /var/lib/grafana/dashboards/ubi193.json
+          subPath: dashboard.json
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          periodSeconds: 5
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          periodSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          periodSeconds: 5
+          failureThreshold: 3
+        command:
+        - /run.sh
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: config
+        configMap:
+          name: monitoring-config

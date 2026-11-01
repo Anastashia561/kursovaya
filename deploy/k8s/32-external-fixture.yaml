@@ -1,0 +1,105 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-service
+  namespace: external
+spec:
+  selector:
+    app: external-service
+  ports:
+  - name: http
+    port: 443
+    targetPort: 8443
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: external-service
+  namespace: external
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: external-service
+  template:
+    metadata:
+      labels:
+        app: external-service
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      containers:
+      - name: external-service
+        image: ubi193:dev
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8443
+        env:
+        - name: SERVICE
+          value: external_service
+        - name: PORT
+          value: '8443'
+        resources:
+          requests:
+            cpu: 50m
+            memory: 96Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: tls
+          mountPath: /run/tls
+          readOnly: true
+        startupProbe:
+          httpGet:
+            path: /healthz
+            port: 8443
+            scheme: HTTPS
+          periodSeconds: 5
+          failureThreshold: 30
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: 8443
+            scheme: HTTPS
+          periodSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8443
+            scheme: HTTPS
+          periodSeconds: 5
+          failureThreshold: 3
+        command:
+        - uvicorn
+        - services.external_service.main:create_app
+        - --factory
+        - --host
+        - 0.0.0.0
+        - --port
+        - '8443'
+        - --ssl-certfile
+        - /run/tls/tls.crt
+        - --ssl-keyfile
+        - /run/tls/tls.key
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: tls
+        secret:
+          secretName: external-tls

@@ -1,0 +1,90 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: bootstrap
+  namespace: security
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        app: bootstrap
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      automountServiceAccountToken: false
+      containers:
+      - name: bootstrap
+        image: ubi193:dev
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8081
+        env:
+        - name: SERVICE
+          value: security_service
+        - name: PORT
+          value: '8081'
+        - name: BOOTSTRAP_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: service-config
+              key: BOOTSTRAP_DATABASE_URL
+        - name: APP_DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: service-config
+              key: APP_DATABASE_URL
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: service-config
+              key: ADMIN_PASSWORD
+        - name: AUDITOR_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: service-config
+              key: AUDITOR_PASSWORD
+        - name: SVC_SECURITY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: service-config
+              key: SVC_SECURITY_PASSWORD
+        - name: SVC_AUTH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: service-config
+              key: SVC_AUTH_PASSWORD
+        - name: SVC_LOG_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: service-config
+              key: SVC_LOG_PASSWORD
+        resources:
+          requests:
+            cpu: 50m
+            memory: 96Mi
+          limits:
+            cpu: 500m
+            memory: 256Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        command:
+        - python
+        - -m
+        - scripts.bootstrap
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      restartPolicy: OnFailure

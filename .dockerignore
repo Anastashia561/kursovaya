@@ -1,0 +1,8 @@
+.git
+.local
+.venv
+venv
+__pycache__
+.pytest_cache
+test-results
+*.docx

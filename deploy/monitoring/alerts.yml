@@ -1,0 +1,10 @@
+groups:
+- name: egress
+  rules:
+  - alert: EgressDenied
+    expr: sum(increase(egress_blocked_total[1m])) > 0
+    for: 0s
+    labels:
+      severity: warning
+    annotations:
+      summary: "Outgoing request denied by R1\u2013R5"

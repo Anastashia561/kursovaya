@@ -6,6 +6,19 @@ on:
 permissions:
   contents: read
 jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Standalone Windows launch without a global Python environment
+        shell: cmd
+        run: START_LOCAL.cmd --smoke
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-results
+          path: test-results/
   tests:
     runs-on: ubuntu-latest
     services:

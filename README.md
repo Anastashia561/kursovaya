@@ -23,7 +23,9 @@
 
 Требуется Python 3.12. `START_LOCAL.cmd` создает `.venv`, устанавливает зависимости и запускает сервисы. NGINX 1.28.0 для Windows загружается с nginx.org в исключенный из Git каталог `.local`. Сервисы слушают только 127.0.0.1. В локальном профиле идентификация источника явно ограничена loopback, а PostgreSQL заменен SQLite. Этот профиль проверяет HTTP, настоящий NGINX и TLS; он не подтверждает блокировки строк PostgreSQL или NetworkPolicy.
 
-```powershell
+``Автоматическая проверка: START_LOCAL.cmd --smoke. При уже установленном обычном Python 3.12 также возможен ручной запуск:
+
+`powershell
 py -3.12 -m venv .venv
 .venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .venv\Scripts\python.exe -m pytest -q

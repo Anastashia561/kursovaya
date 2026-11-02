@@ -10,11 +10,36 @@ if (-not (Test-Path -LiteralPath $PythonExe)) {
     $ArchivePath=Join-Path $DownloadRoot 'python312.zip'
     Write-Host 'Downloading standalone CPython 3.12 from the official NuGet package...'
     Invoke-WebRequest -UseBasicParsing -Uri 'https://www.nuget.org/api/v2/package/python/3.12.10' -OutFile $ArchivePath
-    $ActualHash=(Get-FileHash -LiteralPath $ArchivePath -Algorithm SHA256).Hash
+    $HashAlgorithm=[System.Security.Cryptography.SHA256]::Create()
+    $ArchiveStream=[System.IO.File]::OpenRead($ArchivePath)
+    try {
+        $ActualHash=[System.BitConverter]::ToString($HashAlgorithm.ComputeHash($ArchiveStream)).Replace('-','')
+    } finally {
+        $ArchiveStream.Dispose()
+        $HashAlgorithm.Dispose()
+    }
     if ($ActualHash -ne '0EB85C2DFCCCCF1B17352DE4C397F69194035B7D37149EACC16F1147D93DE3B8') {
         throw 'Python package checksum mismatch'
     }
-    Expand-Archive -LiteralPath $ArchivePath -DestinationPath $RuntimeRoot -Force
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $Package=[System.IO.Compression.ZipFile]::OpenRead($ArchivePath)
+    try {
+        $RuntimePrefix=[System.IO.Path]::GetFullPath($RuntimeRoot)+[System.IO.Path]::DirectorySeparatorChar
+        foreach ($Entry in $Package.Entries) {
+            $Destination=[System.IO.Path]::GetFullPath((Join-Path $RuntimeRoot $Entry.FullName))
+            if (-not $Destination.StartsWith($RuntimePrefix,[System.StringComparison]::OrdinalIgnoreCase)) {
+                throw 'Invalid path in Python package'
+            }
+            if ($Entry.Name -eq '') {
+                [System.IO.Directory]::CreateDirectory($Destination) | Out-Null
+            } else {
+                [System.IO.Directory]::CreateDirectory([System.IO.Path]::GetDirectoryName($Destination)) | Out-Null
+                [System.IO.Compression.ZipFileExtensions]::ExtractToFile($Entry,$Destination,$true)
+            }
+        }
+    } finally {
+        $Package.Dispose()
+    }
 }
 $VenvPython=Join-Path $ProjectRoot '.venv\Scripts\python.exe'
 if (-not (Test-Path -LiteralPath $VenvPython)) {
